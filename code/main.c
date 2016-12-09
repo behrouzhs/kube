@@ -37,7 +37,7 @@ int main(int argc, char **argv)
 	char *output_path = NULL;
 	int arg_option;
 
-	while ((arg_option = ARG_PARSER_FUNC(argc, argv, "cCd:D:k:K:m:M:i:I:o:O:p::P::")) != EOF)
+	while ((arg_option = ARG_PARSER_FUNC(argc, argv, "cCnNd:D:k:K:m:M:p:P:i:I:o:O:t::T::")) != EOF)
 	{
 		switch (arg_option)
 		{
@@ -61,6 +61,10 @@ int main(int argc, char **argv)
 		case 'M':
 			min_knn = atoi(ARG_PARSER_ARGUMENT);
 			break;
+		case 'p':
+		case 'P':
+			kernel_poly_degree = atoi(ARG_PARSER_ARGUMENT);
+			break;
 		case 'i':
 		case 'I':
 			input_path = ARG_PARSER_ARGUMENT;
@@ -75,13 +79,6 @@ int main(int argc, char **argv)
 				no_thread = omp_get_num_procs() / 2;
 			else
 				no_thread = atoi(ARG_PARSER_ARGUMENT);
-			break;
-		case 'p':
-		case 'P':
-			if (ARG_PARSER_ARGUMENT == NULL || ARG_PARSER_ARGUMENT[0] == '\0')
-				kernel_poly_degree = DEFAULT_KERNEL_POLY_DEGREE;
-			else
-				kernel_poly_degree = atoi(ARG_PARSER_ARGUMENT);
 			break;
 		default:
 			printf("Invalid usage - trying to run with default arguments.\r\n");

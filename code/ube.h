@@ -16,7 +16,7 @@ void sparse_build(double *data, int n_row, int *out_row, int *out_col, double *o
 void sparse_normalize_vectors(double *val, int no_point, int *start_indices);
 void initialize_random(int no_point, int no_dim, double *out_Y);
 void dist_to_affinity_elbow(double *D_W, int no_point, int knn, int min_knn);
-void ube_optimize(int *nn_idx, double *affinity, int no_point, int no_dim, int knn, double *Y);
+void ube_optimize(int *nn_idx, double *affinity, int no_point, int no_dim, int knn, int kernel_poly_degree, int is_newton, double *Y);
 
 // parallel functions
 void sparse_build_omp(double *data, int n_row, int no_thread, int *out_row, int *out_col, double *out_val, int *no_point, int **start_indices);
