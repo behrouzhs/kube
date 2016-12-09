@@ -1,4 +1,4 @@
-function [Y, elapsed_time] = KUBE_wrapper(X, no_dim, no_proc, is_cosine, pca_preprocess, no_knn, no_min_knn)
+function [Y, elapsed_time] = KUBE_wrapper(X, no_dim, no_proc, is_cosine, pca_preprocess, no_knn, no_min_knn, is_newton, kernel_poly_degree)
     rng('shuffle');
     if (nargout > 1); tic; end
     
@@ -37,7 +37,7 @@ function [Y, elapsed_time] = KUBE_wrapper(X, no_dim, no_proc, is_cosine, pca_pre
         end
     end
     
-    if (nargout > 1); disp(['Preprocessing done in ' toc 'seconds']); end
+    if (nargout > 1); disp(['Preprocessing done in ' num2str(toc) ' seconds']); end
     
     path = which('UBE_c');
     path = fileparts(path);
@@ -51,9 +51,12 @@ function [Y, elapsed_time] = KUBE_wrapper(X, no_dim, no_proc, is_cosine, pca_pre
         save_matrix(X, data_path);
     end
     
-    command = fullfile(path, './ube');
+    command = ['"' fullfile(path, './ube') '"'];
     if (exist('is_cosine', 'var') ~= 0 && isempty(is_cosine) == 0 && is_cosine > 0)
         command = [command ' -c'];
+    end
+    if (exist('is_newton', 'var') ~= 0 && isempty(is_newton) == 0 && is_newton > 0)
+        command = [command ' -n'];
     end
     if (exist('no_dim', 'var') ~= 0 && isempty(no_dim) == 0 && no_dim > 1)
         command = [command ' -d ' num2str(no_dim)];
@@ -64,8 +67,11 @@ function [Y, elapsed_time] = KUBE_wrapper(X, no_dim, no_proc, is_cosine, pca_pre
     if (exist('no_min_knn', 'var') ~= 0 && isempty(no_min_knn) == 0 && no_min_knn > 1)
         command = [command ' -m ' num2str(no_min_knn)];
     end
+    if (exist('kernel_poly_degree', 'var') ~= 0 && isempty(kernel_poly_degree) == 0 && kernel_poly_degree > 1)
+        command = [command ' -p ' num2str(kernel_poly_degree)];
+    end
     if (exist('no_proc', 'var') ~= 0 && isempty(no_proc) == 0 && no_proc > 1)
-        command = [command ' -p' num2str(no_proc)];
+        command = [command ' -t' num2str(no_proc)];
     end
     command = [command ' -i ' data_path];
     
