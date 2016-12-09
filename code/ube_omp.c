@@ -7,12 +7,12 @@
 #include "file_operations.h"
 
 
-void ube_optimize_kernel_omp(int *nn_idx, double *affinity, int no_point, int no_dim, int knn, int no_thread, double *Y)
+void ube_optimize_omp(int *nn_idx, double *affinity, int no_point, int no_dim, int knn, int kernel_poly_degree, int is_newton, int no_thread, double *Y)
 {
 	int i, j, k, d, iter;
 	int n_temp, n_ind, n_jnd, n_ink, n_tnp, n_tnd;
 
-	double len, sum_sim, exag_init = 1, exag_step = ((exag_init - 1) / ((double)MAX_ITER / 5.0)), exag_base = exag_init, exag_val = exag_init, alpha = ALPHA_INIT, alpha_base = ALPHA_INIT, alpha_step = (0.9 * ALPHA_INIT / (double)MAX_ITER);
+	double len, d_temp, alpha = ALPHA_INIT, alpha_base = ALPHA_INIT, alpha_step = (0.9 * ALPHA_INIT / (double)MAX_ITER);
 
 	omp_set_num_threads(no_thread);
 #pragma omp parallel default(none) shared(no_thread)
@@ -30,7 +30,7 @@ void ube_optimize_kernel_omp(int *nn_idx, double *affinity, int no_point, int no
 	initialize_random_omp(no_point, no_dim, no_thread, Y);
 	for (iter = 0; iter < MAX_ITER; ++iter)
 	{
-#pragma omp parallel default(none) private(i, j, k, d, n_ind, n_jnd, n_ink, n_tnd, n_tnp, len, sum_sim, n_temp) shared(Y, nn_idx, affinity, no_point, no_dim, knn, alpha, similarity, att_f, rep_f, gradient, newton, exag_val)
+#pragma omp parallel default(none) private(i, j, k, d, n_ind, n_jnd, n_ink, n_tnd, n_tnp, len, n_temp, d_temp) shared(Y, nn_idx, affinity, no_point, no_dim, knn, alpha, similarity, att_f, rep_f, gradient, newton, is_newton, kernel_poly_degree)
 	{
 		int tid = omp_get_thread_num();
 		n_tnd = tid * no_dim;
@@ -64,15 +64,23 @@ void ube_optimize_kernel_omp(int *nn_idx, double *affinity, int no_point, int no
 				for (d = 0; d < no_dim; ++d)
 					similarity[n_temp] += Y[n_jnd + d] * Y[n_ind + d];
 				similarity[n_temp] = (similarity[n_temp] + 1.0) / 2.0;
-				//similarity[n_temp] *= similarity[n_temp] * similarity[n_temp];
-				similarity[n_temp] *= similarity[n_temp];
+
+				// poynomial kernel
+				d_temp = similarity[n_temp];
+				for (d = 0; d < (kernel_poly_degree - 1); d++)
+					similarity[n_temp] *= d_temp;
 			}
 			similarity[n_tnp + i] = 0;
 
 			for (k = 0; k < knn; ++k)
 			{
 				if (affinity[n_ink + k] > 0)
+				{
+					/*similarity[n_tnp + nn_idx[n_ink + k]] -= affinity[n_ink + k];
+					if (similarity[n_tnp + nn_idx[n_ink + k]] < 0)
+						similarity[n_tnp + nn_idx[n_ink + k]] = 0;*/
 					similarity[n_tnp + nn_idx[n_ink + k]] = 0;
+				}
 				else
 					break;
 			}
@@ -94,22 +102,25 @@ void ube_optimize_kernel_omp(int *nn_idx, double *affinity, int no_point, int no
 			len = 0;
 			for (d = 0; d < no_dim; ++d)
 			{
-				gradient[n_tnd + d] = (exag_val * att_f[n_tnd + d]) - rep_f[n_tnd + d];
+				gradient[n_tnd + d] = att_f[n_tnd + d] - rep_f[n_tnd + d];
 				len += gradient[n_tnd + d] * gradient[n_tnd + d];
 			}
 			len = sqrt(len);
 			for (d = 0; d < no_dim; ++d)
 				gradient[n_tnd + d] /= len;
 
-			inverse_mult(Y, no_point, no_dim, &gradient[n_tnd], &newton[n_tnd]);
+			if (is_newton)
+				inverse_mult(Y, no_point, no_dim, &gradient[n_tnd], &newton[n_tnd]);
 
 			// update point
 			len = 0;
 			for (d = 0; d < no_dim; ++d)
 			{
 				n_temp = n_ind + d;
-				//Y[n_temp] = Y[n_temp] + (alpha * gradient[n_tnd + d]);
-				Y[n_temp] = Y[n_temp] + (alpha * newton[n_tnd + d]);
+				if (is_newton)
+					Y[n_temp] = Y[n_temp] + (alpha * newton[n_tnd + d]);
+				else
+					Y[n_temp] = Y[n_temp] + (alpha * gradient[n_tnd + d]);
 				len += Y[n_temp] * Y[n_temp];
 			}
 			len = sqrt(len);
@@ -123,12 +134,6 @@ void ube_optimize_kernel_omp(int *nn_idx, double *affinity, int no_point, int no
 	alpha = (alpha_base * 13.0 / ALPHA_INIT) - 6.0;
 	alpha = 1.0 / (1.0 + exp(-alpha));
 	alpha = (alpha * 0.9 * ALPHA_INIT) + (0.1 * ALPHA_INIT);
-
-	/*exag_base -= exag_step;
-	exag_val = (exag_base * 13.0 / exag_init) - 6.0;
-	exag_val = 1.0 / (1.0 + exp(-exag_val));
-	exag_val = (exag_val * 0.9 * exag_init) + (0.1 * exag_init);*/
-	exag_val = fmax(exag_val - exag_step, 1.0);
 	}
 
 	free(similarity); similarity = NULL;
@@ -166,13 +171,13 @@ void initialize_random_omp(int no_point, int no_dim, int no_thread, double *out_
 }
 
 
-void dist_to_affinity_elbow_underdevel_omp(double *D_W, int no_point, int knn, int min_knn, int no_thread)
+void dist_to_affinity_elbow_omp(double *D_W, int no_point, int knn, int min_knn, int no_thread)
 {
 	int i, k, n_temp, n_ink, elbow_cut = 0;
-	double sigma2, d_temp, min_d, max_d, sum_d, elbow_mxd = 0.0;
+	double sigma2, d_temp, min_d, max_d, elbow_mxd = 0.0;
 
 	omp_set_num_threads(no_thread);
-#pragma omp parallel default(none) private(i, k, n_temp, n_ink, sigma2, d_temp, min_d, max_d, sum_d, elbow_cut, elbow_mxd) shared(no_point, knn, min_knn, D_W)
+#pragma omp parallel default(none) private(i, k, n_temp, n_ink, sigma2, d_temp, min_d, max_d, elbow_cut, elbow_mxd) shared(no_point, knn, min_knn, D_W)
 	{
 		#pragma omp for
 		for (i = 0; i < no_point; ++i)
@@ -198,7 +203,6 @@ void dist_to_affinity_elbow_underdevel_omp(double *D_W, int no_point, int knn, i
 			if (sigma2 == 0)
 				sigma2 = 1;
 
-			sum_d = 0;
 			for (k = 0; k < knn; ++k)
 			{
 				n_temp = n_ink + k;
@@ -207,45 +211,9 @@ void dist_to_affinity_elbow_underdevel_omp(double *D_W, int no_point, int knn, i
 				D_W[n_temp] = exp(-0.5 * d_temp * d_temp / sigma2);
 				if (D_W[n_temp] < 0.0110)
 					D_W[n_temp] = 0;
-				//sum_d += D_W[n_temp];
 			}
-			/*for (k = 0; k < knn; ++k)
-				D_W[n_ink + k] /= sum_d;*/
 		}
 	}
-}
-
-
-void dist_to_affinity_elbow_cosine_omp(double *D_W, int no_point, int knn, int min_knn, int no_thread)
-{
-	save_matrix_double("D_W1.dat", D_W, no_point, knn);
-	int i, k, n_temp, n_ink, elbow_cut = 0;
-	double elbow_mxd = 0.0;
-
-	omp_set_num_threads(no_thread);
-#pragma omp parallel default(none) private(i, k, n_temp, n_ink, elbow_cut, elbow_mxd) shared(no_point, knn, min_knn, D_W)
-	{
-		#pragma omp for
-		for (i = 0; i < no_point; ++i)
-		{
-			n_ink = i * knn;
-			for (k = 0; k < knn; ++k)
-			{
-				n_temp = n_ink + k;
-				D_W[n_temp] = 1 - D_W[n_temp];
-				D_W[n_temp] *= D_W[n_temp] * D_W[n_temp];
-			}
-
-			elbow(&D_W[n_ink], knn, &elbow_cut, &elbow_mxd);
-			if (elbow_mxd > (double)(ELBOW_THRESH * (double)knn))
-				for (k = ((int)fmax(elbow_cut, min_knn) + 1); k < knn; ++k)
-					D_W[n_ink + k] = 0;
-			else
-				for (k = ((int)fmax(min_knn, (double)knn * (1.0 - ((D_W[n_ink] - D_W[n_ink + knn - 1]) / D_W[n_ink]))) + 1); k < knn; ++k)
-					D_W[n_ink + k] = 0;
-		}
-	}
-	save_matrix_double("D_W2.dat", D_W, no_point, knn);
 }
 
 
@@ -321,4 +289,3 @@ void sparse_normalize_vectors_omp(double *val, int no_point, int *start_indices,
 		}
 	}
 }
-

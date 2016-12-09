@@ -22,7 +22,9 @@
 #define DEFAULT_DIMENSIONALITY 3
 #define DEFAULT_KNN 90
 #define DEFAULT_MIN_KNN 15
+#define DEFAULT_KERNEL_POLY_DEGREE 1
 #define DEFAULT_IS_EUCLIDEAN 1
+#define DEFAULT_IS_NEWTON 0
 
 
 void create_filename(char *input_path, char **output_path);
@@ -30,7 +32,7 @@ void create_filename(char *input_path, char **output_path);
 
 int main(int argc, char **argv)
 {
-	int knn = DEFAULT_KNN, min_knn = DEFAULT_MIN_KNN, no_dim_target = DEFAULT_DIMENSIONALITY, is_euclidean = DEFAULT_IS_EUCLIDEAN, no_thread = DEFAULT_NO_THREAD;
+	int knn = DEFAULT_KNN, min_knn = DEFAULT_MIN_KNN, no_dim_target = DEFAULT_DIMENSIONALITY, kernel_poly_degree = DEFAULT_KERNEL_POLY_DEGREE, is_newton = DEFAULT_IS_NEWTON, is_euclidean = DEFAULT_IS_EUCLIDEAN, no_thread = DEFAULT_NO_THREAD;
 	char *input_path = (char*)"data.dat";
 	char *output_path = NULL;
 	int arg_option;
@@ -42,6 +44,10 @@ int main(int argc, char **argv)
 		case 'c':
 		case 'C':
 			is_euclidean = 0;
+			break;
+		case 'n':
+		case 'N':
+			is_newton = 1;
 			break;
 		case 'd':
 		case 'D':
@@ -63,18 +69,28 @@ int main(int argc, char **argv)
 		case 'O':
 			output_path = ARG_PARSER_ARGUMENT;
 			break;
-		case 'p':
-		case 'P':
+		case 't':
+		case 'T':
 			if (ARG_PARSER_ARGUMENT == NULL || ARG_PARSER_ARGUMENT[0] == '\0')
 				no_thread = omp_get_num_procs() / 2;
 			else
 				no_thread = atoi(ARG_PARSER_ARGUMENT);
+			break;
+		case 'p':
+		case 'P':
+			if (ARG_PARSER_ARGUMENT == NULL || ARG_PARSER_ARGUMENT[0] == '\0')
+				kernel_poly_degree = DEFAULT_KERNEL_POLY_DEGREE;
+			else
+				kernel_poly_degree = atoi(ARG_PARSER_ARGUMENT);
 			break;
 		default:
 			printf("Invalid usage - trying to run with default arguments.\r\n");
 			break;
 		}
 	}
+
+	if (no_dim_target > 5)
+		is_newton = 0;
 
 	if (output_path == NULL)
 		create_filename(input_path, &output_path);
@@ -87,7 +103,7 @@ int main(int argc, char **argv)
 	double* Y = (double*)malloc(sizeof(double) * no_point * no_dim_target);
 	if (Y == NULL) { printf("Memory allocation failed.\r\n"); exit(EXIT_FAILURE); }
 	double start_time = time_gettime();
-	ube(data, &no_point, no_dim, no_dim_target, knn, min_knn, is_euclidean, no_thread, Y);
+	ube(data, &no_point, no_dim, no_dim_target, knn, min_knn, kernel_poly_degree, is_newton, is_euclidean, no_thread, Y);
 	printf("total time: %lf seconds\r\n", time_duration(start_time));
 
 	save_matrix_double(output_path, Y, no_point, no_dim_target);
