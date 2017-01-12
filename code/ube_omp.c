@@ -75,12 +75,7 @@ void ube_optimize_omp(int *nn_idx, double *affinity, int no_point, int no_dim, i
 			for (k = 0; k < knn; ++k)
 			{
 				if (affinity[n_ink + k] > 0)
-				{
-					/*similarity[n_tnp + nn_idx[n_ink + k]] -= affinity[n_ink + k];
-					if (similarity[n_tnp + nn_idx[n_ink + k]] < 0)
-						similarity[n_tnp + nn_idx[n_ink + k]] = 0;*/
 					similarity[n_tnp + nn_idx[n_ink + k]] = 0;
-				}
 				else
 					break;
 			}
